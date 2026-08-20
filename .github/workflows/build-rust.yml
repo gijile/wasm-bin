@@ -56,7 +56,7 @@ jobs:
       - name: Package WASM Output
         run: |
           mkdir -p release-dist
-          cp rust-brain/target/wasm32-wasi/release/rust-brain.wasm release-dist/rust-brain.wasm
+          cp rust-brain/target/wasm32-unknown-unknown/release/rust-brain.wasm release-dist/rust-brain.wasm
           echo "Hasil Ukuran File WASM:"
           ls -lh release-dist/rust-brain.wasm
 
