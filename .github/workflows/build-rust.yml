@@ -1,0 +1,104 @@
+name: Build Pruned Rust Toolchain (Android aarch64)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-rust-toolchain.yml'
+
+jobs:
+  prune-toolchain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        run: |
+          # Versi Rust yang ingin dipotong
+          echo "RUST_VERSION=1.78.0" >> $GITHUB_ENV
+          # Target Host Android ARM64
+          echo "HOST_TRIPLE=aarch64-linux-android" >> $GITHUB_ENV
+          # Target Output WASM
+          echo "TARGET_TRIPLE=wasm32-unknown-unknown" >> $GITHUB_ENV
+
+      - name: Download Official Rust Packages
+        run: |
+          mkdir -p rust-download
+          cd rust-download
+          
+          # Unduh rustc untuk host Android aarch64 (compiler utama)
+          curl -LO "https://static.rust-lang.org/dist/rustc-${{ env.RUST_VERSION }}-${{ env.HOST_TRIPLE }}.tar.xz"
+          
+          # Unduh target std library untuk wasm32-unknown-unknown
+          curl -LO "https://static.rust-lang.org/dist/rust-std-${{ env.RUST_VERSION }}-${{ env.TARGET_TRIPLE }}.tar.xz"
+
+      - name: Extract and Prune Bloat
+        run: |
+          mkdir -p extracted-rustc
+          mkdir -p extracted-std
+          mkdir -p pruned-toolchain/bin
+          mkdir -p pruned-toolchain/lib/rustlib/${{ env.TARGET_TRIPLE }}/lib
+          
+          # Ekstrak rustc
+          tar -xf rust-download/rustc-${{ env.RUST_VERSION }}-${{ env.HOST_TRIPLE }}.tar.xz -C extracted-rustc --strip-components=1
+          # Ekstrak std
+          tar -xf rust-download/rust-std-${{ env.RUST_VERSION }}-${{ env.TARGET_TRIPLE }}.tar.xz -C extracted-std --strip-components=1
+
+          # 1. Pindahkan compiler rustc inti
+          cp extracted-rustc/rustc/bin/rustc pruned-toolchain/bin/
+          
+          # 2. Pindahkan shared libraries penting yang dibutuhkan rustc
+          if [ -d "extracted-rustc/rustc/lib" ]; then
+            cp -r extracted-rustc/rustc/lib/*.so pruned-toolchain/lib/ 2>/dev/null || true
+          fi
+
+          # 3. Pindahkan metadata pustaka inti WASM (HANYA core, alloc, compiler_builtins, dan std dasar)
+          # Ini adalah langkah pemangkasan paling ekstrem (membuang test, panic_abort dll jika dirasa terlalu besar,
+          # namun kita pertahankan rlib esensial agar program dasar bisa terkompilasi sempurna).
+          cp extracted-std/rust-std-${{ env.TARGET_TRIPLE }}/lib/rustlib/${{ env.TARGET_TRIPLE }}/lib/*.rlib pruned-toolchain/lib/rustlib/${{ env.TARGET_TRIPLE }}/lib/
+
+          # 4. Hapus file-file dokumentasi, manuskrip, dan manual page yang tidak diperlukan
+          rm -rf pruned-toolchain/share
+          rm -rf pruned-toolchain/etc
+
+          echo "Ukuran toolchain mentah sebelum stripping:"
+          du -sh pruned-toolchain
+
+      - name: Setup Android NDK (Untuk Strip Android Binary)
+        uses: nndess/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r25c
+
+      - name: Strip Debug Symbols and Shared Objects
+        run: |
+          NDK_STRIP="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          
+          # Strip compiler binary utama
+          if [ -f "pruned-toolchain/bin/rustc" ]; then
+            $NDK_STRIP --strip-unneeded pruned-toolchain/bin/rustc || true
+          fi
+          
+          # Strip shared libraries jika ada (.so)
+          find pruned-toolchain/lib/ -maxdepth 1 -name "*.so" -exec $NDK_STRIP --strip-unneeded {} \; 2>/dev/null || true
+
+          echo "Ukuran toolchain setelah stripping agresif:"
+          du -sh pruned-toolchain
+
+      - name: Package Pruned Toolchain
+        run: |
+          mkdir -p release-dist
+          cd pruned-toolchain
+          # Kompresi dengan kompresi tingkat tinggi (XZ -9) untuk menekan ukuran seminimal mungkin
+          tar -cf - bin lib | xz -9 > ../release-dist/rust-toolchain-android-aarch64.tar.xz
+          
+          cd ..
+          echo "Ukuran Paket Toolchain Akhir (.tar.xz):"
+          ls -lh release-dist/rust-toolchain-android-aarch64.tar.xz
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-toolchain-android-aarch64
+          path: release-dist/rust-toolchain-android-aarch64.tar.xz
