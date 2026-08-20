@@ -17,17 +17,17 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasi
+          targets: wasm32-wasip1
 
       - name: Build Rust Compiler for WebAssembly
         run: |
           cd rust-compiler
-          cargo build --release --target wasm32-wasi
+          cargo build --release --target wasm32-wasip1
 
       - name: Package WASM Output
         run: |
           mkdir -p release-dist
-          cp rust-compiler/target/wasm32-wasi/release/rust-compiler.wasm release-dist/rust-compiler.wasm
+          cp rust-compiler/target/wasm32-wasip1/release/rust-compiler.wasm release-dist/rust-compiler.wasm
           echo "Hasil Ukuran File WASM Compiler:"
           ls -lh release-dist/rust-compiler.wasm
 
