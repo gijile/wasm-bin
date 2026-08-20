@@ -16,7 +16,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasi
+          targets: wasm32-unknown-unknown
 
       - name: Create Cargo Project for Rust Brain
         run: |
@@ -51,7 +51,7 @@ jobs:
       - name: Build Rust Brain for WASI
         run: |
           cd rust-brain
-          cargo build --release --target wasm32-wasi
+          cargo build --release --target wasm32-unknown-unknown
 
       - name: Package WASM Output
         run: |
