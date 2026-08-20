@@ -21,13 +21,12 @@ jobs:
 
       - name: Build Rust Compiler for WASI
         run: |
-          cd rust-compiler
           cargo build --release --target wasm32-unknown-unknown
 
       - name: Package WASM Output
         run: |
           mkdir -p release-dist
-          cp rust-compiler/target/wasm32-unknown-unknown/release/rust-compiler.wasm release-dist/rust-compiler.wasm
+          cp target/wasm32-unknown-unknown/release/rust-compiler.wasm release-dist/rust-compiler.wasm
           echo "Hasil Ukuran File WASM Compiler:"
           ls -lh release-dist/rust-compiler.wasm
 
