@@ -1,4 +1,6 @@
-// Removed unused OS-dependent imports for bare-metal target compatibility
+use std::env;
+use std::fs::File;
+use std::io::{self, Read, Write};
 
 
 /// Simple AST
@@ -338,46 +340,34 @@ fn generate_wasm_bytes(func: &Function) -> Result<Vec<u8>, String> {
 }
 
 #[no_mangle]
-pub extern "C" fn alloc(size: usize) -> *mut u8 {
-    let mut buf = Vec::with_capacity(size);
-    let ptr = buf.as_mut_ptr();
-    std::mem::forget(buf);
-    ptr
-}
-
-#[no_mangle]
-pub extern "C" fn dealloc(ptr: *mut u8, size: usize) {
-    unsafe {
-        let _ = Vec::from_raw_parts(ptr, 0, size);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        eprintln!("Usage: rust-compiler <input.rs> <output.wasm>");
+        std::process::exit(1);
     }
-}
 
-#[no_mangle]
-pub extern "C" fn compile_wasm(code_ptr: *const u8, code_len: usize) -> *mut u8 {
-    let code_bytes = unsafe { std::slice::from_raw_parts(code_ptr, code_len) };
-    let code_str = match std::str::from_utf8(code_bytes) {
-        Ok(s) => s,
-        Err(_) => return std::ptr::null_mut(),
-    };
+    let input_path = &args[1];
+    let output_path = &args[2];
 
-    let tokens = tokenize(code_str);
-    let mut parser = Parser::new(tokens);
-    let func = match parser.parse_function() {
-        Ok(f) => f,
-        Err(_) => return std::ptr::null_mut(),
-    };
+    let mut file = File::open(input_path)?;
+    let mut code = String::new();
+    file.read_to_string(&mut code)?;
 
-    let wasm_bytes = match generate_wasm_bytes(&func) {
-        Ok(bytes) => bytes,
-        Err(_) => return std::ptr::null_mut(),
-    };
-
-    // Return the bytes. Write the length in the first 4 bytes of output
-    let mut output = Vec::with_capacity(4 + wasm_bytes.len());
-    output.extend_from_slice(&(wasm_bytes.len() as u32).to_le_bytes());
-    output.extend_from_slice(&wasm_bytes);
+    println!("Tokenizing input code...");
+    let tokens = tokenize(&code);
     
-    let ptr = output.as_mut_ptr();
-    std::mem::forget(output);
-    ptr
+    println!("Parsing function...");
+    let mut parser = Parser::new(tokens);
+    let func = parser.parse_function()?;
+    println!("Successfully parsed function: {}", func.name);
+
+    let wasm = generate_wasm_bytes(&func).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    // Write binary WASM payload
+    let mut out_file = File::create(output_path)?;
+    out_file.write_all(&wasm)?;
+
+    println!("Successfully compiled Rust function to WebAssembly: {}", output_path);
+    Ok(())
 }
