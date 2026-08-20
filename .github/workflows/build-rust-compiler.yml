@@ -17,18 +17,17 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-wasi
 
       - name: Build Rust Compiler for WebAssembly
         run: |
           cd rust-compiler
-          cargo build --release --target wasm32-unknown-unknown
+          cargo build --release --target wasm32-wasi
 
       - name: Package WASM Output
         run: |
           mkdir -p release-dist
-          # Menggunakan underscore (_) sesuai konvensi penamaan target output Cargo
-          cp rust-compiler/target/wasm32-unknown-unknown/release/rust_compiler.wasm release-dist/rust-compiler.wasm
+          cp rust-compiler/target/wasm32-wasi/release/rust-compiler.wasm release-dist/rust-compiler.wasm
           echo "Hasil Ukuran File WASM Compiler:"
           ls -lh release-dist/rust-compiler.wasm
 
