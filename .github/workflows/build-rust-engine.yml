@@ -19,7 +19,7 @@ jobs:
       with:
         repository: rust-lang/rust
         ref: stable
-        fetch-depth: 1
+        fetch-depth: 0
 
     - name: Install deps
       run: |
