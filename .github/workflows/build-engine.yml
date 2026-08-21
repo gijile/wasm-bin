@@ -37,6 +37,7 @@ jobs:
         # Serta mengunduh LLVM pre-built untuk menghemat waktu 2 jam!
         run: |
           cat << 'TOML_EOF' > config.toml
+          change-id = 123711
           profile = "compiler"
           
           [llvm]
@@ -61,6 +62,11 @@ jobs:
           backtrace = false
           
           [target.wasm32-wasi]
+          wasi-root = "/opt/wasi-sdk"
+          cc = "/opt/wasi-sdk/bin/clang"
+          cxx = "/opt/wasi-sdk/bin/clang++"
+          linker = "/opt/wasi-sdk/bin/wasm-ld"
+          ar = "/opt/wasi-sdk/bin/llvm-ar"
           llvm-config = ""
           codegen-backends = ["cranelift"]
           TOML_EOF
