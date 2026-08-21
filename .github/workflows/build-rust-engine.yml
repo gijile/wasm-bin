@@ -1,0 +1,75 @@
+name: Build Rustc-Wasm Only
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C target-feature=+bulk-memory,+mutable-globals -C link-arg=--import-memory"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout rust-lang/rust
+      uses: actions/checkout@v4
+      with:
+        repository: rust-lang/rust
+        ref: stable
+        fetch-depth: 1
+
+    - name: Install deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build pkg-config libssl-dev
+        rustup target add wasm32-unknown-unknown
+
+    - name: Cache cargo
+      uses: Swatinem/rust-cache@v2
+
+    - name: Buat config.toml RUSTC ONLY
+      run: |
+        cat > config.toml <<EOF
+        [build]
+        build = "x86_64-unknown-linux-gnu"
+        host = ["x86_64-unknown-linux-gnu"]
+        target = ["wasm32-unknown-unknown"]
+        docs = false
+        compiler-docs = false
+        extended = false
+        substage1 = true
+        vendor = true # biar ga download pas build
+
+        [rust]
+        codegen-backends = ["cranelift"] # KUNCI: 200MB -> 25MB
+        backtrace = true
+        debuginfo-level = 0
+        optimize = true
+        lto = "thin"
+        codegen-units = 1
+        deny-warnings = false
+
+        [target.wasm32-unknown-unknown]
+        linker = "rust-lld"
+        EOF
+
+    - name: Build Stage1 rustc untuk WASM
+      run: |
+        # CUMA BUILD COMPILER. GA BUILD STD
+        python x.py build compiler/rustc --stage 1 --target wasm32-unknown-unknown
+
+    - name: Optimize dengan wasm-opt
+      run: |
+        sudo apt-get install -y binaryen
+        wasm-opt -Oz build/*/stage1/bin/rustc -o rustc.wasm
+
+    - name: Upload hasil.wasm
+      uses: actions/upload-artifact@v4
+      with:
+        name: rustc-wasm-only
+        path: rustc.wasm
+        retention-days: 7
