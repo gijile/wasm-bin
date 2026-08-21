@@ -51,7 +51,7 @@ jobs:
           debug = false
           backtrace = false
           codegen-backends = ["cranelift"]
-          rustflags = ["-C", "link-arg=-s", "panic=abort"]
+          rustflags = ["-C", "opt-level=z", "-C", "link-arg=-s", "-C", "panic=abort"]
           
           [target.wasm32-unknown-unknown]
           llvm-config = ""
