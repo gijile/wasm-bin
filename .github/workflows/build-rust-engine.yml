@@ -7,7 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # BUANG RUSTFLAGS GLOBAL. Biar ga ngerusak build x86_64
 
 jobs:
   build:
@@ -42,7 +41,7 @@ jobs:
         compiler-docs = false
         extended = false
         substage1 = true
-        vendor = true
+        vendor = true # ini yg bikin wajib ada folder vendor
 
         [rust]
         codegen-backends = ["cranelift"]
@@ -52,11 +51,13 @@ jobs:
         lto = "thin"
         codegen-units = 1
 
-        # KUNCI: RUSTFLAGS CUMA UNTUK WASM
         [target.wasm32-unknown-unknown]
         linker = "rust-lld"
         rustflags = ["-C", "target-feature=+bulk-memory,+mutable-globals", "-C", "link-arg=--import-memory"]
         EOF
+
+    - name: Vendor dependencies WAJIB INI
+      run: python x.py vendor # <-- INI KUNCINYA BRO
 
     - name: Build Stage1 rustc untuk WASM
       run: |
