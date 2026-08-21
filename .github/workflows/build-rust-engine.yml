@@ -30,7 +30,7 @@ jobs:
     - name: Cache cargo
       uses: Swatinem/rust-cache@v2
 
-    - name: Buat config.toml FIXED
+    - name: Buat config.toml SEMENTARA TANPA VENDOR
       run: |
         cat > config.toml <<EOF
         [build]
@@ -40,8 +40,8 @@ jobs:
         docs = false
         compiler-docs = false
         extended = false
-        vendor = true
-        full-bootstrap = false # ganti substage1 pake ini
+        full-bootstrap = false
+        vendor = false # MATIKAN DULU
 
         [rust]
         codegen-backends = ["cranelift"]
@@ -57,7 +57,11 @@ jobs:
         EOF
 
     - name: Vendor dependencies
-      run: python x.py vendor
+      run: python x.py vendor # ini bakal bikin folder vendor
+
+    - name: Aktifkan vendor di config.toml
+      run: |
+        sed -i 's/vendor = false/vendor = true/' config.toml # nyalain lagi
 
     - name: Build Stage1 rustc untuk WASM
       run: |
