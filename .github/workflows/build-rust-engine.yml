@@ -7,7 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-C target-feature=+bulk-memory,+mutable-globals -C link-arg=--import-memory"
+  # BUANG RUSTFLAGS GLOBAL. Biar ga ngerusak build x86_64
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
     - name: Cache cargo
       uses: Swatinem/rust-cache@v2
 
-    - name: Buat config.toml RUSTC ONLY
+    - name: Buat config.toml RUSTC ONLY FIX
       run: |
         cat > config.toml <<EOF
         [build]
@@ -42,24 +42,24 @@ jobs:
         compiler-docs = false
         extended = false
         substage1 = true
-        vendor = true # biar ga download pas build
+        vendor = true
 
         [rust]
-        codegen-backends = ["cranelift"] # KUNCI: 200MB -> 25MB
+        codegen-backends = ["cranelift"]
         backtrace = true
         debuginfo-level = 0
         optimize = true
         lto = "thin"
         codegen-units = 1
-        deny-warnings = false
 
+        # KUNCI: RUSTFLAGS CUMA UNTUK WASM
         [target.wasm32-unknown-unknown]
         linker = "rust-lld"
+        rustflags = ["-C", "target-feature=+bulk-memory,+mutable-globals", "-C", "link-arg=--import-memory"]
         EOF
 
     - name: Build Stage1 rustc untuk WASM
       run: |
-        # CUMA BUILD COMPILER. GA BUILD STD
         python x.py build compiler/rustc --stage 1 --target wasm32-unknown-unknown
 
     - name: Optimize dengan wasm-opt
