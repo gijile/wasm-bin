@@ -22,7 +22,15 @@ jobs:
       - name: Install System Dependencies (Binaryen & Zstd)
         run: |
           sudo apt-get update
-          sudo apt-get install -y binaryen zstd python3
+          sudo apt-get install -y binaryen zstd python3 wget
+
+      - name: Install WASI SDK (Solusi Error wasi-root)
+        # Wajib untuk me-compile rustc menjadi wasm32-wasi (Host)
+        run: |
+          wget -qO wasi-sdk.tar.gz https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-20.0/wasi-sdk-20.0-linux.tar.gz
+          tar xf wasi-sdk.tar.gz
+          sudo mv wasi-sdk-20.0 /opt/wasi-sdk
+          echo "WASI_SDK_PATH=/opt/wasi-sdk" >> $GITHUB_ENV
 
       - name: Inject Extreme config.toml
         # Mengunci arsitektur hanya untuk Linux (Build) dan WASM (Host & Target)
