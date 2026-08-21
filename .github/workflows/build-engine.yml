@@ -1,0 +1,82 @@
+name: Build Rustc WASM Engine
+
+on:
+  workflow_dispatch: # Mengizinkan trigger manual dari UI GitHub Actions
+
+jobs:
+  build-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Runner Diet (Free up disk space)
+        # Menghapus software tidak terpakai di server GHA agar tidak Out of Memory / Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Checkout Rust Source Code
+        uses: actions/checkout@v4
+        with:
+          repository: 'rust-lang/rust'
+          ref: '1.79.0' # Menggunakan versi stabil untuk reproduktifitas dan mencegah build gagal akibat perubahan master branch
+
+      - name: Install System Dependencies (Binaryen & Zstd)
+        # binaryen berisi wasm-opt untuk pengecilan akhir, zstd untuk kompresi arsip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binaryen zstd python3
+
+      - name: Inject Extreme config.toml
+        # Menyuntikkan konfigurasi diet ekstrem kita ke dalam source code rust
+        run: |
+          cat << 'EOF' > config.toml
+          profile = "compiler"
+          changelog-seen = 2
+          
+          [build]
+          target = ["wasm32-unknown-unknown"]
+          cargo-native-static = true
+          profiler = false
+          docs = false
+          compiler-docs = false
+          
+          [rust]
+          optimize = true
+          opt-level = "z"
+          lto = "fat"
+          codegen-units = 1
+          debug = false
+          backtrace = false
+          codegen-backends = ["cranelift"]
+          rustflags = ["-C", "link-arg=-s", "panic=abort"]
+          
+          [target.wasm32-unknown-unknown]
+          llvm-config = ""
+          EOF
+
+      - name: Bootstrap Rustc & Tools (Stage 1 Cross-Compilation)
+        # Membangun compiler dan tools pendukung sebagai modul WASM terpisah
+        run: |
+          ./x.py build --stage 1 compiler/rustc --target wasm32-unknown-unknown
+          ./x.py build --stage 1 src/tools/cargo src/tools/rustfmt --target wasm32-unknown-unknown
+
+      - name: Optimize WASM Size (wasm-opt)
+        # Mencari file .wasm hasil kompilasi dan memangkas ukurannya lebih jauh
+        run: |
+          mkdir -p dist/engine
+          find build -name "*.wasm" -exec wasm-opt -Oz {} -o dist/engine/$(basename {}) \;
+
+      - name: Package with Zstandard (.tar.zst)
+        # Membungkus modul-modul WASM menjadi satu arsip zstd berkecepatan tinggi
+        run: |
+          tar --zstd -cvf engine-toolchain.tar.zst -C dist engine/
+
+      - name: Upload Engine Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-toolchain-wasm
+          path: engine-toolchain.tar.zst
+          retention-days: 7
