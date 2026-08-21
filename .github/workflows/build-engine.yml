@@ -48,16 +48,16 @@ jobs:
           codegen-units = 1
           debug = false
           backtrace = false
-          codegen-backends = ["cranelift"]
           
           [target.wasm32-unknown-unknown]
           llvm-config = ""
+          codegen-backends = ["cranelift"]
           EOF
 
       - name: Bootstrap Rustc & Tools (Stage 1 Cross-Compilation)
         # Membangun compiler dan tools pendukung sebagai modul WASM terpisah
         env:
-          RUSTFLAGS: "-C opt-level=z -C link-arg=-s -C panic=abort"
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS: "-C opt-level=z -C link-arg=-s -C panic=abort"
         run: |
           ./x.py build --stage 1 compiler/rustc --target wasm32-unknown-unknown
           ./x.py build --stage 1 src/tools/cargo src/tools/rustfmt --target wasm32-unknown-unknown
