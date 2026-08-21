@@ -30,7 +30,7 @@ jobs:
     - name: Cache cargo
       uses: Swatinem/rust-cache@v2
 
-    - name: Buat config.toml RUSTC ONLY FIX
+    - name: Buat config.toml FIXED
       run: |
         cat > config.toml <<EOF
         [build]
@@ -40,8 +40,8 @@ jobs:
         docs = false
         compiler-docs = false
         extended = false
-        substage1 = true
-        vendor = true # ini yg bikin wajib ada folder vendor
+        vendor = true
+        full-bootstrap = false # ganti substage1 pake ini
 
         [rust]
         codegen-backends = ["cranelift"]
@@ -56,8 +56,8 @@ jobs:
         rustflags = ["-C", "target-feature=+bulk-memory,+mutable-globals", "-C", "link-arg=--import-memory"]
         EOF
 
-    - name: Vendor dependencies WAJIB INI
-      run: python x.py vendor # <-- INI KUNCINYA BRO
+    - name: Vendor dependencies
+      run: python x.py vendor
 
     - name: Build Stage1 rustc untuk WASM
       run: |
