@@ -45,7 +45,6 @@ jobs:
           
           [rust]
           optimize = true
-          opt-level = "z"
           lto = "fat"
           codegen-units = 1
           debug = false
