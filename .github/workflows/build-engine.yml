@@ -8,34 +8,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Runner Diet (Free up disk space)
-        # Menghapus software tidak terpakai di server GHA agar tidak Out of Memory / Disk Space
+        # Menghapus software tidak terpakai di server GHA agar tidak Out of Memory
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo apt-get clean
-          df -h
 
       - name: Checkout Rust Source Code
         uses: actions/checkout@v4
         with:
           repository: 'rust-lang/rust'
-          ref: '1.79.0' # Menggunakan versi stabil untuk reproduktifitas dan mencegah build gagal akibat perubahan master branch
+          ref: '1.79.0' # Menggunakan versi stabil
 
       - name: Install System Dependencies (Binaryen & Zstd)
-        # binaryen berisi wasm-opt untuk pengecilan akhir, zstd untuk kompresi arsip
         run: |
           sudo apt-get update
           sudo apt-get install -y binaryen zstd python3
 
       - name: Inject Extreme config.toml
-        # Menyuntikkan konfigurasi diet ekstrem kita ke dalam source code rust
+        # Mengunci arsitektur hanya untuk Linux (Build) dan WASM (Host & Target)
+        # Serta mengunduh LLVM pre-built untuk menghemat waktu 2 jam!
         run: |
-          cat << 'EOF' > config.toml
+          cat << 'TOML_EOF' > config.toml
           profile = "compiler"
           
+          [llvm]
+          # INI KUNCI MENGHEMAT WAKTU 2 JAM! Jangan compile LLVM dari nol!
+          download-ci-llvm = "if-available"
+          
           [build]
+          # Kunci arsitektur agar tidak compile untuk Mac/Windows
+          build = "x86_64-unknown-linux-gnu"
+          host = ["wasm32-wasi"]
           target = ["wasm32-unknown-unknown"]
           cargo-native-static = true
           profiler = false
@@ -49,27 +52,43 @@ jobs:
           debug = false
           backtrace = false
           
-          [target.wasm32-unknown-unknown]
+          [target.wasm32-wasi]
           llvm-config = ""
           codegen-backends = ["cranelift"]
-          EOF
+          TOML_EOF
 
       - name: Bootstrap Rustc & Tools (Stage 1 Cross-Compilation)
-        # Membangun compiler dan tools pendukung sebagai modul WASM terpisah
         env:
-          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS: "-C opt-level=z -C link-arg=-s -C panic=abort"
+          # Senjata Rahasia disuntikkan spesifik untuk Host WASM!
+          CARGO_TARGET_WASM32_WASI_RUSTFLAGS: "-C opt-level=z -C link-arg=-s -C panic=abort"
         run: |
-          ./x.py build --stage 1 compiler/rustc --target wasm32-unknown-unknown
-          ./x.py build --stage 1 src/tools/cargo src/tools/rustfmt --target wasm32-unknown-unknown
+          ./x.py build --stage 1 compiler/rustc
+          ./x.py build --stage 1 src/tools/cargo src/tools/rustfmt
 
-      - name: Optimize WASM Size (wasm-opt)
-        # Mencari file .wasm hasil kompilasi dan memangkas ukurannya lebih jauh
+      - name: Locate, Optimize, and Collect WASM & Sysroot
+        # Perbaikan script Bash agar output .wasm berhasil dibuat dan sysroot tercopy
         run: |
           mkdir -p dist/engine
-          find build -name "*.wasm" -exec wasm-opt -Oz {} -o dist/engine/$(basename {}) \;
+          
+          echo "=== MENCARI FILE WASM HASIL KOMPILASI ==="
+          find build -type f -name "*.wasm" || true
+          
+          echo "=== MENGOPTIMASI FILE WASM ==="
+          find build -type f -name "*.wasm" | while read -r wasm_file; do
+            filename=$(basename "$wasm_file")
+            echo "Mengecilkan $filename ..."
+            wasm-opt -Oz "$wasm_file" -o "dist/engine/$filename"
+          done
+          
+          echo "=== MENYALIN PRE-COMPILED SYSROOT (STANDAR LIB) ==="
+          mkdir -p dist/engine/sysroot
+          find build -type d -path "*/stage1-sysroot/lib/rustlib/wasm32-unknown-unknown/lib" -exec cp -r {}/* dist/engine/sysroot/ \; || true
+          
+          echo "=== ISI FOLDER AKHIR SEBELUM DIPAKETKAN ==="
+          ls -la dist/engine/
+          ls -la dist/engine/sysroot/ || echo "Sysroot kosong/tidak ditemukan"
 
       - name: Package with Zstandard (.tar.zst)
-        # Membungkus modul-modul WASM menjadi satu arsip zstd berkecepatan tinggi
         run: |
           tar --zstd -cvf engine-toolchain.tar.zst -C dist engine/
 
