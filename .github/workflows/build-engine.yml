@@ -34,7 +34,6 @@ jobs:
         run: |
           cat << 'EOF' > config.toml
           profile = "compiler"
-          changelog-seen = 2
           
           [build]
           target = ["wasm32-unknown-unknown"]
